@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter
+    xmlns="https://github.com/spotbugs/filter/3.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0 https://raw.githubusercontent.com/spotbugs/filter/3.0.0/findbugs-exclude.xsd">
+    <!-- BatchItem volatile fields are read by UI/FX bindings -->
+    <Match>
+        <Class name="app.core.BatchItem"/>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <Match>
+        <Class name="app.core.BatchItem"/>
+        <Bug pattern="UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <!-- ConversionProfile record - Map is part of API contract -->
+    <Match>
+        <Class name="app.core.ConversionProfile"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Class name="app.core.ConversionProfile"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- OutputNaming - path.getFileName() null is handled by dot check -->
+    <Match>
+        <Class name="app.core.OutputNaming"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+    <!-- JavaFX model classes - properties are by design for binding -->
+    <Match>
+        <Package name="app.ui.model"/>
+        <Bug pattern="EI_EXPOSE_REP"/>
+    </Match>
+    <Match>
+        <Package name="app.ui.model"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <Match>
+        <Package name="app.ui.model"/>
+        <Bug pattern="UUF_UNUSED_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <!-- PipelineWorker - AtomicBoolean shared for cancellation is intentional -->
+    <Match>
+        <Class name="app.core.PipelineWorker"/>
+        <Bug pattern="EI_EXPOSE_REP2"/>
+    </Match>
+    <!-- Validation - getExtension handles empty name -->
+    <Match>
+        <Class name="app.core.Validation"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+    <!-- CloudConvertFacadeImpl - constructor throws for invalid config; getBody() null checked by SDK -->
+    <Match>
+        <Class name="app.core.CloudConvertFacadeImpl"/>
+        <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+    </Match>
+    <Match>
+        <Class name="app.core.CloudConvertFacadeImpl"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+    <!-- PipelineWorker - findExportTaskId returns null only when job malformed -->
+    <Match>
+        <Class name="app.core.PipelineWorker"/>
+        <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Match>
+</FindBugsFilter>

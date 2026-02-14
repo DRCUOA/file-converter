@@ -1,0 +1,46 @@
+# Gradle
+.gradle/
+build/
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+*.log
+hs_err_pid*
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test & coverage
+/test-results/
+/coverage/
+*.exec
+*.gcov
+*.lcov
+
+# Pitest
+/target/pit-reports/
+
+# SpotBugs
+/build/reports/spotbugs/
+
+# Checkstyle
+/build/reports/checkstyle/
+
+# jpackage output
+/build/jpackage/

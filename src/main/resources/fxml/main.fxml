@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<VBox xmlns:fx="http://javafx.com/fxml" fx:controller="app.ui.MainController"
+      prefHeight="600" prefWidth="900" spacing="8">
+    <padding><Insets top="10" right="10" bottom="10" left="10"/></padding>
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <Label text="Profile:"/>
+        <ComboBox fx:id="profileCombo" prefWidth="150"/>
+        <Label text="Output:"/>
+        <TextField fx:id="outputDirField" prefWidth="250" editable="false"/>
+        <Button fx:id="outputDirButton" text="Browse..."/>
+        <Label text="Concurrency:"/>
+        <Spinner fx:id="concurrencySpinner" prefWidth="80" editable="true"/>
+    </HBox>
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <Button fx:id="addFilesButton" text="Add Files..."/>
+        <Button fx:id="removeButton" text="Remove Selected"/>
+        <Button fx:id="clearButton" text="Clear"/>
+        <Button fx:id="startButton" text="Start"/>
+        <Button fx:id="cancelButton" text="Cancel"/>
+        <CheckBox fx:id="skipIneligibleCheck" text="Skip ineligible files"/>
+    </HBox>
+    <TableView fx:id="batchTable" VBox.vgrow="ALWAYS">
+        <columns>
+            <TableColumn fx:id="fileColumn" text="File" prefWidth="150"/>
+            <TableColumn fx:id="typeColumn" text="Type" prefWidth="80"/>
+            <TableColumn fx:id="profileColumn" text="Profile" prefWidth="100"/>
+            <TableColumn fx:id="statusColumn" text="Status" prefWidth="100"/>
+            <TableColumn fx:id="progressColumn" text="Progress" prefWidth="80"/>
+            <TableColumn fx:id="outputColumn" text="Output path" prefWidth="150"/>
+            <TableColumn fx:id="messageColumn" text="Message" prefWidth="200"/>
+        </columns>
+    </TableView>
+    <HBox spacing="10" alignment="CENTER_LEFT">
+        <Label text="Log:"/>
+        <Button fx:id="saveLogButton" text="Save Log..."/>
+    </HBox>
+    <TextArea fx:id="logArea" prefRowCount="5" VBox.vgrow="SOMETIMES" editable="false" wrapText="true"/>
+</VBox>
