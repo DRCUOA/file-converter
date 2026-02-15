@@ -20,7 +20,7 @@ class MemoryLeakTest {
     void noMemoryGrowthOverRepeatedValidation() throws Exception {
         Path f = Files.createTempFile("mem", ".mod");
         Files.writeString(f, "content");
-        var item = new BatchItem(f, f.getParent(),
+        var item = new BatchItem(f,
                 new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of()));
         Runtime rt = Runtime.getRuntime();
         rt.gc();

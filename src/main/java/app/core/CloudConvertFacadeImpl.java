@@ -42,7 +42,6 @@ public class CloudConvertFacadeImpl implements CloudConvertFacade {
         LOG.debug("Creating job for uploadTaskId={} using profile {}", uploadTaskId, profile.id());
         ConvertFilesTaskRequest convertReq = new ConvertFilesTaskRequest()
                 .setInput(uploadTaskId)
-                .setInputFormat(profile.inputFormat())
                 .setOutputFormat(profile.outputFormat());
         for (Map.Entry<String, Object> e : profile.convertOptions().entrySet()) {
             convertReq.set(e.getKey(), e.getValue());

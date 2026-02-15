@@ -31,7 +31,7 @@ These truths must hold for the system. Tests in `tests/invariants/` encode them.
 
 | Invariant | Test location |
 |-----------|---------------|
-| Only `.mod`, `.jpg`, `.jpeg`, `.docx` accepted for MVP profiles | `tests/invariants/FormatValidationTest.java` |
+| Only input formats represented by configured conversion profiles are accepted | `tests/invariants/FormatValidationTest.java` |
 | File must exist, readable, size > 0 before upload | `tests/invariants/PreflightValidationTest.java` |
 | Profile compatibility enforced before API call | `tests/invariants/ProfileCompatibilityTest.java` |
 

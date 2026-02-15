@@ -99,9 +99,7 @@ public class MainController implements Initializable {
     @Override
     public void initialize(URL location, ResourceBundle resources) {
         profileCombo.setItems(FXCollections.observableArrayList(
-                new ConversionProfileFx(Profiles.MOD_TO_MOV),
-                new ConversionProfileFx(Profiles.JPEG_TO_WEBP),
-                new ConversionProfileFx(Profiles.DOCX_TO_PDF)));
+                Profiles.all().stream().map(ConversionProfileFx::new).toList()));
         profileCombo.getSelectionModel().selectFirst();
         concurrencySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(1, 8, 2));
         batchTable.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
@@ -191,7 +189,7 @@ public class MainController implements Initializable {
             ConversionProfile profile = getSelectedProfile();
             LOG.debug("Adding {} file(s) with profile {}", files.size(), profile.id());
             for (File f : files) {
-                BatchItem item = new BatchItem(f.toPath(), outputDir, profile);
+                BatchItem item = new BatchItem(f.toPath(), profile);
                 Validation.ValidationResult vr = Validation.validate(item);
                 if (!vr.valid() && skipIneligibleCheck.isSelected()) {
                     item.status = "Skipped";
@@ -239,7 +237,7 @@ public class MainController implements Initializable {
                     items.size(), concurrencySpinner.getValue());
             saveSettings();
             uiExecutor.submit(() -> {
-                batchRunner.run(items);
+                batchRunner.run(items, outputDir);
                 Platform.runLater(() -> {
                     batchItems.forEach(BatchItemFx::syncFromItem);
                     log("Batch completed");

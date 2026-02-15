@@ -20,7 +20,7 @@ class PreflightValidationTest {
     void nonexistentFileFails() {
         Path fake = Path.of("/nonexistent/path/file.mod");
         var profile = new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of());
-        var result = Validation.validate(new BatchItem(fake, Path.of("/out"), profile));
+        var result = Validation.validate(new BatchItem(fake, profile));
         assertThat(result.valid()).isFalse();
         assertThat(result.message()).contains("exist");
     }
@@ -29,7 +29,7 @@ class PreflightValidationTest {
     void emptyFileFails() throws Exception {
         Path f = Files.createTempFile("empty", ".mod");
         var profile = new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of());
-        var result = Validation.validate(new BatchItem(f, f.getParent(), profile));
+        var result = Validation.validate(new BatchItem(f, profile));
         assertThat(result.valid()).isFalse();
         assertThat(result.message()).contains("empty");
     }
@@ -39,7 +39,7 @@ class PreflightValidationTest {
         Path f = Files.createTempFile("valid", ".mod");
         Files.writeString(f, "content");
         var profile = new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of());
-        var result = Validation.validate(new BatchItem(f, f.getParent(), profile));
+        var result = Validation.validate(new BatchItem(f, profile));
         assertThat(result.valid()).isTrue();
     }
 }

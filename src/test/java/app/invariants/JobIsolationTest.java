@@ -60,7 +60,7 @@ class JobIsolationTest {
 
     @Test
     void pipelineWorkerProcessesSingleFile() {
-        BatchItem item = new BatchItem(Path.of("/tmp/a.mod"), Path.of("/out"),
+        BatchItem item = new BatchItem(Path.of("/tmp/a.mod"),
                 new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of()));
         assertThat(item.jobId).isNull();
     }

@@ -2,14 +2,16 @@ package app.core;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * Pre-flight validation for batch items.
  */
 public final class Validation {
 
-    private static final List<String> ALLOWED_EXTENSIONS = List.of(".mod", ".jpg", ".jpeg", ".docx");
+    private static final Set<String> ALLOWED_EXTENSIONS = buildAllowedExtensions();
 
     private Validation() {
     }
@@ -53,6 +55,22 @@ public final class Validation {
             normalized = "jpg";
         }
         return normalized.equals(profile.inputFormat());
+    }
+
+    private static Set<String> buildAllowedExtensions() {
+        Set<String> extensions = new LinkedHashSet<>();
+        for (ConversionProfile profile : Profiles.all()) {
+            String format = profile.inputFormat();
+            if (format == null || format.isBlank()) {
+                continue;
+            }
+            String normalized = format.toLowerCase();
+            extensions.add("." + normalized);
+            if ("jpg".equals(normalized)) {
+                extensions.add(".jpeg");
+            }
+        }
+        return Collections.unmodifiableSet(extensions);
     }
 
     public record ValidationResult(boolean valid, String message) {

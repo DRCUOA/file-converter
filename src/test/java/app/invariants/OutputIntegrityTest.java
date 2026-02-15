@@ -22,7 +22,7 @@ class OutputIntegrityTest {
         Path input = tempDir.resolve("test.mod");
         Files.writeString(input, "fake mod content");
         ConversionProfile profile = new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of());
-        BatchItem item = new BatchItem(input, tempDir, profile);
+        BatchItem item = new BatchItem(input, profile);
         assertThat(item.outputPath).isNull();
         assertThat(Files.list(tempDir).filter(p -> !p.getFileName().toString().startsWith(".")).count())
                 .isEqualTo(1);

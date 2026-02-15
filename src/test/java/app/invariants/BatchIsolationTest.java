@@ -23,8 +23,8 @@ class BatchIsolationTest {
         Files.writeString(validFile, "content");
         Files.writeString(invalidFile, "content");
         var profile = new app.core.ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of());
-        BatchItem valid = new BatchItem(validFile, tempDir, profile);
-        BatchItem invalid = new BatchItem(invalidFile, tempDir, profile);
+        BatchItem valid = new BatchItem(validFile, profile);
+        BatchItem invalid = new BatchItem(invalidFile, profile);
         var validResult = Validation.validate(valid);
         var invalidResult = Validation.validate(invalid);
         assertThat(validResult.valid()).isTrue();

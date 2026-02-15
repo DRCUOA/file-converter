@@ -21,7 +21,7 @@ class ProfileCompatibilityTest {
         Path f = Files.createTempFile("test", ".mod");
         Files.writeString(f, "x");
         var profile = new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of());
-        var result = Validation.validate(new BatchItem(f, f.getParent(), profile));
+        var result = Validation.validate(new BatchItem(f, profile));
         assertThat(result.valid()).isTrue();
     }
 
@@ -30,7 +30,7 @@ class ProfileCompatibilityTest {
         Path f = Files.createTempFile("test", ".mod");
         Files.writeString(f, "x");
         var profile = new ConversionProfile("docx-pdf", "DOCX→PDF", "docx", "pdf", Map.of());
-        var result = Validation.validate(new BatchItem(f, f.getParent(), profile));
+        var result = Validation.validate(new BatchItem(f, profile));
         assertThat(result.valid()).isFalse();
     }
 }

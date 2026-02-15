@@ -44,6 +44,19 @@ application {
     mainClass = 'app.ui.Launcher'
 }
 
+tasks.named('run', JavaExec) {
+    def isMac = System.getProperty("os.name")
+            .toLowerCase(java.util.Locale.ROOT)
+            .contains("mac")
+    if (isMac) {
+        jvmArgs '-Dapple.awt.application.name=Converto', '-Xdock:name=Converto'
+        def dockIcon = file("${rootDir}/src/main/resources/icons/app-icon.png")
+        if (dockIcon.exists()) {
+            jvmArgs "-Xdock:icon=${dockIcon.absolutePath}"
+        }
+    }
+}
+
 tasks.named('startScripts') {
     doLast {
         def javafxJars = classpath.files
@@ -75,16 +88,60 @@ tasks.register('jpackageApp', Exec) {
     def distDir = layout.buildDirectory.get().asFile
     def libDir = new File(distDir, "install/file-converter/lib")
     def destDir = new File(distDir, "jpackage")
-    commandLine 'jpackage',
-            '--type', 'app-image',
-            '--name', 'File Converter',
-            '--app-version', version,
-            '--input', libDir,
-            '--main-jar', "file-converter-${version}.jar",
-            '--main-class', 'app.ui.Launcher',
-            '--dest', destDir
+    def iconIco = file("${rootDir}/src/main/packaging/app-icon.ico")
+    def iconIcns = file("${rootDir}/src/main/packaging/app-icon.icns")
+    def iconPng = file("${rootDir}/src/main/packaging/app-icon.png")
+    def osName = System.getProperty("os.name").toLowerCase(java.util.Locale.ROOT)
+    def isMac = osName.contains("mac")
+    def isWindows = osName.contains("win")
     doFirst {
         destDir.mkdirs()
+        def existingAppImage = new File(destDir, "Converto.app")
+        if (existingAppImage.exists()) {
+            existingAppImage.deleteDir()
+        }
+        def appImageVersion = version.toString().replaceFirst(/-.*/, '')
+        def args = [
+                'jpackage',
+                '--type', 'app-image',
+                '--name', 'Converto',
+                '--app-version', appImageVersion,
+                '--input', libDir,
+                '--main-jar', "file-converter-${version}.jar",
+                '--main-class', 'app.ui.Launcher',
+                '--dest', destDir
+        ]
+        if (isMac) {
+            args += ['--mac-package-name', 'Converto']
+        }
+        def iconFile = null
+        if (isMac) {
+            iconFile = (iconIcns.exists() && iconIcns.length() > 0)
+                    ? iconIcns
+                    : ((iconPng.exists() && iconPng.length() > 0) ? iconPng : null)
+        } else if (isWindows) {
+            iconFile = (iconIco.exists() && iconIco.length() > 0) ? iconIco : null
+        } else {
+            iconFile = (iconPng.exists() && iconPng.length() > 0)
+                    ? iconPng
+                    : ((iconIco.exists() && iconIco.length() > 0) ? iconIco : null)
+        }
+        if (iconFile != null) {
+            args += ['--icon', iconFile.absolutePath]
+            logger.lifecycle("Using app icon: ${iconFile}")
+        } else {
+            logger.lifecycle("Custom icon not found; using default jpackage icon")
+        }
+        // Put JavaFX on module path to avoid "Unsupported JavaFX configuration" warning
+        def javafxJars = libDir.listFiles()
+                .findAll { it.name.startsWith('javafx-') }
+                .collect { "\$APPDIR/${it.name}" }
+                .join(':')
+        if (javafxJars) {
+            args += ['--java-options', "--module-path=${javafxJars}"]
+            args += ['--java-options', '--add-modules=javafx.controls,javafx.fxml']
+        }
+        commandLine args
     }
 }
 

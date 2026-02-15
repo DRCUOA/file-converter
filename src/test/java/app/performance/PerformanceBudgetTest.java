@@ -24,7 +24,7 @@ class PerformanceBudgetTest {
     void validationCompletesUnder50ms() throws Exception {
         Path f = Files.createTempFile("perf", ".mod");
         Files.writeString(f, "content");
-        var item = new BatchItem(f, f.getParent(),
+        var item = new BatchItem(f,
                 new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of()));
         long start = System.nanoTime();
         for (int i = 0; i < 100; i++) {

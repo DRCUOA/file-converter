@@ -22,7 +22,7 @@ class ValidationTest {
     @Test
     void nullInputFails() {
         var profile = new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of());
-        var item = new BatchItem(null, Path.of("/out"), profile);
+        var item = new BatchItem(null, profile);
         var result = Validation.validate(item);
         assertThat(result.valid()).isFalse();
     }
@@ -32,7 +32,7 @@ class ValidationTest {
         Path f = Files.createTempFile("test", ".mod");
         Files.writeString(f, "data");
         var profile = new ConversionProfile("mod-mov", "MOD→MOV", "mod", "mov", Map.of());
-        var result = Validation.validate(new BatchItem(f, f.getParent(), profile));
+        var result = Validation.validate(new BatchItem(f, profile));
         assertThat(result.valid()).isTrue();
     }
 }

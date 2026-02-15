@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Converter – Log Viewer</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --trace: #79c0ff;
+      --debug: #a5d6ff;
+      --info: #7ee787;
+      --warn: #d29922;
+      --error: #f85149;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      padding: 1rem 1.5rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .path {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .controls {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    button {
+      padding: 0.4rem 0.8rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+      background: var(--border);
+      color: var(--text);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover { background: #3d4d66; }
+    button.primary { background: #238636; }
+    button.primary:hover { background: #2ea043; }
+    .status {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .status.error { color: var(--error); }
+    .copy-group {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .copy-group input {
+      width: 3.5rem;
+      padding: 0.35rem 0.4rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      text-align: right;
+    }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+      width: 100%;
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--border);
+    }
+    .date-range {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .filters label {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-right: 0.25rem;
+    }
+    .filters input[type="date"],
+    .filters input[type="datetime-local"] {
+      padding: 0.35rem 0.5rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+    .level-filters {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .level-filters label {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      cursor: pointer;
+      margin: 0;
+    }
+    .level-filters input[type="checkbox"] {
+      accent-color: var(--info);
+    }
+    .level-filters .trace { color: var(--trace); }
+    .level-filters .debug { color: var(--debug); }
+    .level-filters .info { color: var(--info); }
+    .level-filters .warn { color: var(--warn); }
+    .level-filters .error { color: var(--error); }
+    main {
+      padding: 1rem 1.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .log-container {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .log-content {
+      padding: 1rem;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-line {
+      padding: 0.15rem 0;
+      border-bottom: 1px solid transparent;
+      display: flex;
+      gap: 0.75rem;
+    }
+    .log-line:hover {
+      background: rgba(255,255,255,0.03);
+    }
+    .log-line-num {
+      flex-shrink: 0;
+      width: 2.5rem;
+      text-align: right;
+      color: var(--muted);
+      font-size: 0.85em;
+      user-select: none;
+    }
+    .log-fresh::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--info);
+      flex-shrink: 0;
+      margin-right: 0.25rem;
+      align-self: center;
+    }
+    .log-separator {
+      padding: 0.25rem 0;
+      border-top: 1px dashed var(--border);
+      color: var(--muted);
+      font-size: 0.8em;
+    }
+    .log-line .ts { color: var(--muted); }
+    .log-line .level { font-weight: 600; }
+    .log-line.trace .level { color: var(--trace); }
+    .log-line.debug .level { color: var(--debug); }
+    .log-line.info .level { color: var(--info); }
+    .log-line.warn .level { color: var(--warn); }
+    .log-line.error .level { color: var(--error); }
+    .log-line .thread { color: var(--muted); font-size: 0.9em; }
+    .log-line .logger { color: var(--trace); }
+    .log-line .msg { color: var(--text); }
+    .empty {
+      color: var(--muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-row">
+      <div>
+        <h1>File Converter – Log Viewer</h1>
+        <div class="path" id="path">~/.file-converter.log</div>
+      </div>
+      <div class="controls">
+        <span class="status" id="status"></span>
+        <div class="copy-group">
+          <label for="copyLines">Copy last</label>
+          <input type="number" id="copyLines" min="1" max="200" value="50" title="1–200 lines">
+          <label for="copyLines">lines</label>
+          <button type="button" id="copy">Copy</button>
+        </div>
+        <button type="button" class="primary" id="refresh">Refresh</button>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="date-range">
+        <label for="dateFrom">From</label>
+        <input type="datetime-local" id="dateFrom" title="Filter lines from this date/time">
+        <label for="dateTo">To</label>
+        <input type="datetime-local" id="dateTo" title="Filter lines until this date/time">
+      </div>
+      <div class="level-filters">
+        <label><input type="checkbox" id="levelTrace" checked> <span class="trace">TRACE</span></label>
+        <label><input type="checkbox" id="levelDebug" checked> <span class="debug">DEBUG</span></label>
+        <label><input type="checkbox" id="levelInfo" checked> <span class="info">INFO</span></label>
+        <label><input type="checkbox" id="levelWarn" checked> <span class="warn">WARN</span></label>
+        <label><input type="checkbox" id="levelError" checked> <span class="error">ERROR</span></label>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div class="log-container">
+      <div class="log-content" id="logContent">
+        <div class="empty">Loading…</div>
+      </div>
+    </div>
+  </main>
+  <script>
+    const LOG_URL = '/log';
+    const pathEl = document.getElementById('path');
+    const statusEl = document.getElementById('status');
+    const contentEl = document.getElementById('logContent');
+    const refreshBtn = document.getElementById('refresh');
+    const copyBtn = document.getElementById('copy');
+    const copyLinesInput = document.getElementById('copyLines');
+    const dateFromEl = document.getElementById('dateFrom');
+    const dateToEl = document.getElementById('dateTo');
+    const levelTraceEl = document.getElementById('levelTrace');
+    const levelDebugEl = document.getElementById('levelDebug');
+    const levelInfoEl = document.getElementById('levelInfo');
+    const levelWarnEl = document.getElementById('levelWarn');
+    const levelErrorEl = document.getElementById('levelError');
+    let rawLines = [];
+    let prevLineCount = 0;
+
+    function parseLine(line) {
+      const m = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s+\[([^\]]+)\]\s+(\S+)\s+-\s+(.*)$/);
+      if (m) {
+        return { ts: m[1], level: m[2], thread: m[3], logger: m[4], msg: m[5] };
+      }
+      return null;
+    }
+
+    function tsToComparable(ts) {
+      if (!ts) return '';
+      return ts.replace(' ', 'T').substring(0, 19);
+    }
+
+    function levelClass(level) {
+      return (level || '').toLowerCase();
+    }
+
+    function escapeHtml(s) {
+      const div = document.createElement('div');
+      div.textContent = s;
+      return div.innerHTML;
+    }
+
+    function getFilteredLines() {
+      const dateFrom = dateFromEl.value ? dateFromEl.value.substring(0, 19) : null;
+      const dateTo = dateToEl.value ? dateToEl.value.substring(0, 19) : null;
+      const levels = {
+        TRACE: levelTraceEl.checked,
+        DEBUG: levelDebugEl.checked,
+        INFO: levelInfoEl.checked,
+        WARN: levelWarnEl.checked,
+        ERROR: levelErrorEl.checked
+      };
+      const anyLevel = Object.values(levels).some(Boolean);
+      const result = [];
+      rawLines.forEach((line, origIdx) => {
+        const p = parseLine(line);
+        if (p) {
+          if (!anyLevel || !levels[p.level]) return;
+          const tsComp = tsToComparable(p.ts);
+          if (dateFrom && tsComp < dateFrom) return;
+          if (dateTo && tsComp > dateTo) return;
+        } else {
+          if (anyLevel || dateFrom || dateTo) return;
+        }
+        result.push({ line, origIdx });
+      });
+      return result;
+    }
+
+    function renderLine(line, i, lineNum, isFresh) {
+      const freshClass = isFresh ? ' log-fresh' : '';
+      const numSpan = `<span class="log-line-num">${lineNum}</span>`;
+      const p = parseLine(line);
+      if (p) {
+        const cls = levelClass(p.level);
+        return `<div class="log-line ${cls}${freshClass}" data-line="${lineNum}">${numSpan}<span><span class="ts">${escapeHtml(p.ts)}</span> <span class="level">${escapeHtml(p.level)}</span> <span class="thread">[${escapeHtml(p.thread)}]</span> <span class="logger">${escapeHtml(p.logger)}</span> – <span class="msg">${escapeHtml(p.msg)}</span></span></div>`;
+      }
+      return `<div class="log-line${freshClass}" data-line="${lineNum}">${numSpan}<span>${escapeHtml(line)}</span></div>`;
+    }
+
+    function setStatus(msg, isError) {
+      statusEl.textContent = msg;
+      statusEl.classList.toggle('error', !!isError);
+    }
+
+    function render() {
+      if (rawLines.length === 0) return;
+      const filtered = getFilteredLines();
+      if (filtered.length === 0) {
+        contentEl.innerHTML = '<div class="empty">No lines match the current filters.</div>';
+        return;
+      }
+      const n = rawLines.length;
+      const hasNewLines = prevLineCount > 0 && n > prevLineCount;
+      const parts = [];
+      for (let i = filtered.length - 1; i >= 0; i--) {
+        const { line, origIdx } = filtered[i];
+        const origLineNum = n - origIdx;
+        const isFresh = hasNewLines && origIdx >= prevLineCount;
+        parts.unshift(renderLine(line, origIdx, origLineNum, isFresh));
+      }
+      contentEl.innerHTML = parts.join('');
+    }
+
+    async function load() {
+      setStatus('');
+      contentEl.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const r = await fetch(LOG_URL);
+        if (!r.ok) throw new Error(r.status === 404 ? 'Log file not found' : `HTTP ${r.status}`);
+        const text = await r.text();
+        rawLines = text.split(/\r?\n/).filter(Boolean);
+        prevLineCount = rawLines.length;
+        if (rawLines.length === 0) {
+          contentEl.innerHTML = '<div class="empty">Log file is empty.</div>';
+        } else {
+          render();
+        }
+        const filtered = getFilteredLines();
+        setStatus(`Loaded ${rawLines.length} lines${filtered.length !== rawLines.length ? ` (${filtered.length} shown)` : ''}`);
+      } catch (e) {
+        contentEl.innerHTML = `<div class="empty">${escapeHtml(e.message)}. Run: python3 serve-log.py</div>`;
+        setStatus(e.message, true);
+      }
+    }
+
+    async function copyToClipboard() {
+      const n = Math.floor(Number(copyLinesInput.value));
+      if (n < 1 || n > 200) {
+        setStatus('Enter a number between 1 and 200', true);
+        return;
+      }
+      const filtered = getFilteredLines();
+      if (filtered.length === 0) {
+        setStatus('No log lines to copy', true);
+        return;
+      }
+      const slice = filtered.slice(-n).map((e) => e.line);
+      const text = slice.join('\n');
+      try {
+        await navigator.clipboard.writeText(text);
+        setStatus(`Copied ${slice.length} lines`);
+      } catch (e) {
+        setStatus('Clipboard access denied', true);
+      }
+    }
+
+    function onFilterChange() {
+      if (rawLines.length === 0) return;
+      render();
+      const filtered = getFilteredLines();
+      setStatus(`Loaded ${rawLines.length} lines${filtered.length !== rawLines.length ? ` (${filtered.length} shown)` : ''}`);
+    }
+
+    refreshBtn.addEventListener('click', load);
+    copyBtn.addEventListener('click', copyToClipboard);
+    dateFromEl.addEventListener('change', onFilterChange);
+    dateToEl.addEventListener('change', onFilterChange);
+    levelTraceEl.addEventListener('change', onFilterChange);
+    levelDebugEl.addEventListener('change', onFilterChange);
+    levelInfoEl.addEventListener('change', onFilterChange);
+    levelWarnEl.addEventListener('change', onFilterChange);
+    levelErrorEl.addEventListener('change', onFilterChange);
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,572 @@
+@startuml architecture-overview
+!theme plain
+title Converto - Architecture Overview
+
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+
+package "UI Layer" as ui {
+  [Launcher] as Launcher
+  [MainApp] as MainApp
+  [MainController] as MainController
+  package "model" {
+    [BatchItemFx]
+    [ConversionProfileFx]
+  }
+}
+
+package "Core Layer" as core {
+  [BatchRunner]
+  [PipelineWorker]
+  [CloudConvertFacade] <<interface>>
+  [CloudConvertFacadeImpl]
+  [Validation]
+  [OutputNaming]
+  [ErrorMessages]
+  [Profiles]
+  [ConversionProfile] <<record>>
+  [BatchItem]
+  [BatchItemStatus] <<enum>>
+  [RetryPolicy]
+}
+
+package "Persistence Layer" as persistence {
+  [SettingsStore] <<interface>>
+  [JsonSettingsStore]
+  [AppSettings] <<record>>
+}
+
+package "External" as ext {
+  [CloudConvert SDK]
+  [JavaFX]
+  [Jackson]
+}
+
+' UI flow
+Launcher --> MainApp : main()
+MainApp --> MainController : FXMLLoader
+MainController --> BatchItemFx : creates
+MainController --> ConversionProfileFx : creates
+
+' Core dependencies
+MainController --> BatchRunner : creates
+MainController --> CloudConvertFacadeImpl : creates
+MainController --> Validation : validate()
+MainController --> Profiles : profiles
+MainController --> SettingsStore : load/save
+
+BatchRunner --> PipelineWorker : submits
+BatchRunner --> CloudConvertFacade : uses
+BatchRunner --> Validation : validate()
+
+Validation --> Profiles : buildAllowedExtensions()
+
+PipelineWorker --> CloudConvertFacade : uses
+PipelineWorker --> Validation : validate()
+PipelineWorker --> OutputNaming : resolveInDir()
+PipelineWorker --> ErrorMessages : fromException()
+PipelineWorker --> BatchItem : mutates
+
+CloudConvertFacadeImpl ..|> CloudConvertFacade : implements
+CloudConvertFacadeImpl --> [CloudConvert SDK] : uses
+
+JsonSettingsStore ..|> SettingsStore : implements
+MainController --> JsonSettingsStore : uses
+
+MainApp --> [JavaFX] : extends
+MainController --> [JavaFX] : FXML
+BatchItemFx --> [JavaFX] : properties
+
+JsonSettingsStore --> [Jackson] : ObjectMapper
+
+@enduml
+
+@startuml class-diagram
+!theme plain
+title Converto - Class Diagram (Core & UI)
+
+skinparam classAttributeIconSize 0
+
+package "app.ui" {
+  class Launcher {
+    - {static} main(args: String[])
+  }
+  class MainApp {
+    + start(primaryStage: Stage)
+    - configureDockIcon()
+    + {static} main(args: String[])
+  }
+  class MainController {
+    - profileCombo: ComboBox
+    - outputDirField: TextField
+    - concurrencySpinner: Spinner
+    - batchTable: TableView
+    - batchItems: ObservableList
+    - skipIneligibleCheck: CheckBox
+    - settingsStore: SettingsStore
+    - batchRunner: BatchRunner
+    - outputDir: Path
+    - uiExecutor: ExecutorService
+    + initialize()
+    - loadSettings()
+    - saveSettings()
+    - startBatch()
+    - cancelBatch()
+    - addFiles()
+  }
+}
+
+package "app.ui.model" {
+  class BatchItemFx {
+    - item: BatchItem
+    - status: StringProperty
+    - message: StringProperty
+    - progress: DoubleProperty
+    - outputPath: StringProperty
+    + getItem(): BatchItem
+    + syncFromItem(): void
+  }
+  class ConversionProfileFx {
+    - profile: ConversionProfile
+    - displayName: StringProperty
+    + getProfile(): ConversionProfile
+  }
+}
+
+package "app.core" {
+  interface CloudConvertFacade {
+    + createJobForFile(uploadTaskName, convertName, exportName, profile): String
+    + createUploadTaskAndUpload(file: Path): TaskResult
+    + getJob(jobId: String): JobResult
+    + getTask(jobId, taskId): TaskResult
+    + download(url: String): InputStream
+    + cancelTask(jobId, taskId): void
+    + cancelJob(jobId): void
+  }
+  class CloudConvertFacadeImpl {
+    - client: CloudConvertClient
+    + CloudConvertFacadeImpl(apiKey: String)
+  }
+  class BatchRunner {
+    - facade: CloudConvertFacade
+    - concurrency: int
+    - cancelRequested: AtomicBoolean
+    + run(items: List<BatchItem>, outputDir: Path)
+    + cancel()
+  }
+  class PipelineWorker {
+    - item: BatchItem
+    - outputDir: Path
+    - facade: CloudConvertFacade
+    - cancelRequested: AtomicBoolean
+    + run()
+    - executeConversion()
+    - pollUntilComplete()
+    - getExportUrl()
+  }
+  class BatchItem {
+    + input: Path
+    + profile: ConversionProfile
+    + status: String
+    + progress: double
+    + message: String
+    + outputPath: Path
+    + jobId: String
+    + uploadTaskId: String
+    + exportTaskId: String
+  }
+  class ConversionProfile <<record>> {
+    + id: String
+    + displayName: String
+    + inputFormat: String
+    + outputFormat: String
+    + convertOptions: Map
+  }
+  enum BatchItemStatus {
+    Queued
+    Uploading
+    Converting
+    Exporting
+    Downloading
+    Saving
+    Done
+    Failed
+    Skipped
+    Canceled
+  }
+  class Validation <<utility>> {
+    + {static} validate(item: BatchItem): ValidationResult
+  }
+  class OutputNaming <<utility>> {
+    + {static} resolveInDir(input, outputDir, profile): Path
+  }
+  class ErrorMessages <<utility>> {
+    + {static} fromException(throwable): String
+  }
+  class Profiles <<utility>> {
+    + MOD_TO_MOV, JPEG_TO_WEBP, PNG_TO_JPG, PNG_TO_WEBP, WEBP_TO_PNG
+    + DOCX_TO_PDF, DOC_TO_PDF, PDF_TO_DOCX, PPTX_TO_PDF, XLSX_TO_PDF
+    + MOV_TO_MP4, MP4_TO_MOV, MP4_TO_MP3, WAV_TO_MP3
+    + {static} all(): List<ConversionProfile>
+  }
+  class RetryPolicy {
+    - maxRetries: int
+    - initialBackoffMs: long
+    + getMaxRetries(): int
+    + backoffForAttempt(attempt): long
+    + {static} defaults(): RetryPolicy
+  }
+}
+
+package "app.persistence" {
+  interface SettingsStore {
+    + load(): AppSettings
+    + save(settings: AppSettings)
+    + getSettingsPath(): Path
+  }
+  class JsonSettingsStore {
+    - settingsPath: Path
+    + JsonSettingsStore()
+    + JsonSettingsStore(settingsPath: Path)
+    + load(): AppSettings
+    + save(settings: AppSettings)
+    + getSettingsPath(): Path
+    - resolveDefaultSettingsPath(): project root or ~/.file-converter
+  }
+  class AppSettings <<record>> {
+    + apiKey: String
+    + lastOutputDir: Path
+    + lastProfileId: String
+    + {static} defaults(): AppSettings
+  }
+}
+
+' Relationships
+MainController --> BatchItemFx : creates
+MainController --> ConversionProfileFx : creates
+MainController --> BatchRunner : creates
+MainController --> CloudConvertFacadeImpl : creates
+MainController --> SettingsStore : uses
+MainController --> Validation : uses
+MainController --> Profiles : uses (Profiles.all())
+
+Validation --> Profiles : buildAllowedExtensions()
+
+BatchItemFx --> BatchItem : wraps
+ConversionProfileFx --> ConversionProfile : wraps
+
+BatchRunner --> PipelineWorker : creates
+BatchRunner --> CloudConvertFacade : uses
+BatchRunner --> Validation : uses
+
+PipelineWorker --> BatchItem : mutates
+PipelineWorker --> CloudConvertFacade : uses
+PipelineWorker --> Validation : uses
+PipelineWorker --> OutputNaming : uses
+PipelineWorker --> ErrorMessages : uses
+
+CloudConvertFacadeImpl ..|> CloudConvertFacade
+JsonSettingsStore ..|> SettingsStore
+
+BatchItem --> ConversionProfile : uses
+BatchItem --> BatchItemStatus : status
+Profiles --> ConversionProfile : defines
+
+@enduml
+
+@startuml sequence-batch-flow
+!theme plain
+title Converto - Batch Conversion Flow
+
+actor User
+participant "MainController" as MC
+participant "SettingsStore" as SS
+participant "uiExecutor\n(single thread)" as UE
+participant "BatchRunner" as BR
+participant "Worker Pool\n(concurrency threads)" as WP
+participant "PipelineWorker" as PW
+participant "CloudConvertFacade" as CCF
+participant "CloudConvert API" as API
+
+User -> MC: Click Start
+MC -> SS: load()
+SS --> MC: AppSettings (apiKey, outputDir, profile)
+alt API key missing (settings + env)
+  MC --> User: showAlert("Set CLOUDCONVERT_API_KEY...")
+else Valid
+  MC -> MC: new CloudConvertFacadeImpl(apiKey)
+  MC -> MC: new BatchRunner(facade, concurrency)
+  MC -> MC: saveSettings()
+  MC -> UE: submit(() -> batchRunner.run(items))
+  
+  UE -> BR: run(items, outputDir)
+  BR -> BR: newFixedThreadPool(concurrency)
+  loop For each item (filtered: !Skipped, !Failed)
+    BR -> BR: Validation.validate(item)
+    alt Invalid
+      BR -> BR: item.status = Skipped, continue
+    else Valid
+      BR -> WP: submit(PipelineWorker)
+    end
+  end
+  BR -> BR: pool.shutdown(), awaitTermination(24h)
+  
+  par Workers run concurrently in pool
+    WP -> PW: run()
+    PW -> CCF: createUploadTaskAndUpload(file)
+    CCF -> API: upload file
+    API --> CCF: taskId
+    CCF --> PW: TaskResult
+    PW -> CCF: createJobForFile(taskId, convertName, exportName, profile)
+    CCF -> API: create job
+    API --> CCF: jobId
+    CCF --> PW: jobId
+    loop Poll every 3s (max 600)
+      PW -> CCF: getJob(jobId)
+      CCF -> API: get job status
+      API --> CCF: job status
+      CCF --> PW: JobResult
+    end
+    PW -> CCF: getTask(jobId, exportTaskId)
+    CCF -> API: get task
+    API --> CCF: export URL
+    CCF --> PW: TaskResult (URL)
+    PW -> CCF: download(url)
+    CCF -> API: download file
+    API --> CCF: InputStream
+    CCF --> PW: InputStream
+    PW -> PW: OutputNaming.resolveInDir, copy to .tmp/*.part
+    PW -> PW: atomic move part -> outputPath, status = Done
+  end
+  
+  BR --> UE: run() returns
+  UE -> MC: Platform.runLater(syncFromItem)
+  MC -> MC: batchItems.forEach(BatchItemFx::syncFromItem)
+  MC --> User: log("Batch completed")
+end
+
+@enduml
+
+@startuml sequence-single-conversion
+!theme plain
+title Converto - Single File Conversion (PipelineWorker)
+
+participant "PipelineWorker" as PW
+participant "Validation" as V
+participant "CloudConvertFacade" as CCF
+participant "OutputNaming" as ON
+participant "ErrorMessages" as EM
+participant "BatchItem" as BI
+
+PW -> V: validate(item)
+V --> PW: ValidationResult
+alt !valid
+  PW -> BI: status = Failed, message = result.message()
+  PW --> PW: return
+end
+
+PW -> BI: status = Uploading
+PW -> CCF: createUploadTaskAndUpload(input)
+CCF --> PW: TaskResult (taskId)
+alt cancelRequested
+  PW -> BI: status = Canceled
+  PW --> PW: return
+end
+
+PW -> CCF: createJobForFile(uploadTaskId, convertName, exportName, profile)
+CCF --> PW: jobId
+PW -> BI: jobId, status = Converting
+
+loop poll every 3s (max 600 polls)
+  PW -> CCF: getJob(jobId)
+  CCF --> PW: JobResult
+  alt status = finished
+    PW -> PW: findExportTaskId(job, exportName)
+  else status = error
+    PW -> EM: fromException(RuntimeException)
+    PW -> BI: status = Failed, message
+  else cancelRequested
+    PW -> BI: status = Canceled
+  end
+end
+
+PW -> BI: status = Downloading
+PW -> CCF: getTask(jobId, exportTaskId)
+CCF --> PW: TaskResult (output with URL)
+PW -> ON: resolveInDir(input, outputDir, profile)
+ON --> PW: outputPath
+PW -> CCF: download(url)
+CCF --> PW: InputStream
+PW -> PW: copy to .tmp/*.part
+PW -> PW: atomic move part -> outputPath
+PW -> BI: outputPath, status = Done, progress = 1.0
+
+@enduml
+
+@startuml sequence-add-files
+!theme plain
+title Converto - Add Files Flow
+
+actor User
+participant "MainController" as MC
+participant "Validation" as V
+participant "BatchItemFx" as BIFx
+participant "BatchItem" as BI
+
+User -> MC: Click Add Files
+alt outputDir == null
+  MC --> User: showAlert("Select output directory first")
+else outputDir set
+  MC -> MC: FileChooser.showOpenMultipleDialog()
+  User --> MC: List<File>
+  MC -> MC: profile = getSelectedProfile()
+  loop For each file
+    MC -> BI: new BatchItem(path, outputDir, profile)
+    MC -> V: validate(item)
+    V --> MC: ValidationResult
+    alt !valid && skipIneligibleCheck
+      MC -> BI: status = Skipped, message = vr.message()
+    end
+    MC -> BIFx: new BatchItemFx(item)
+    MC -> MC: batchItems.add(BatchItemFx)
+  end
+  MC --> User: log("Added N file(s)")
+end
+
+@enduml
+
+@startuml state-batch-item
+!theme plain
+title BatchItem Status Lifecycle
+
+[*] --> Queued : new BatchItem()
+
+Queued --> Uploading : PipelineWorker starts
+Queued --> Skipped : Validation fails (addFiles with skip)
+Queued --> Skipped : Validation fails (BatchRunner)
+
+Uploading --> Converting : upload complete
+Uploading --> Canceled : cancel requested
+
+Converting --> Downloading : job finished
+Converting --> Failed : job error / timeout
+Converting --> Canceled : cancel requested
+
+Downloading --> Saving : download complete
+Downloading --> Canceled : cancel requested
+
+Saving --> Done : atomic move complete
+
+Done --> [*]
+Failed --> [*]
+Skipped --> [*]
+Canceled --> [*]
+
+note right of Queued
+  Initial state when item
+  is added to batch
+end note
+
+note right of Done
+  outputPath set,
+  progress = 1.0
+end note
+
+@enduml
+
+@startuml component-layers
+!theme plain
+title Converto - Layered Architecture
+
+skinparam componentStyle rectangle
+
+package "Presentation" {
+  [Launcher]
+  [MainApp]
+  [MainController]
+  [BatchItemFx]
+  [ConversionProfileFx]
+}
+
+package "Application" {
+  [BatchRunner]
+}
+
+package "Domain" {
+  [BatchItem]
+  [ConversionProfile]
+  [BatchItemStatus]
+  [Validation]
+  [OutputNaming]
+  [Profiles]
+}
+
+package "Infrastructure" {
+  [PipelineWorker]
+  [CloudConvertFacade]
+  [CloudConvertFacadeImpl]
+  [ErrorMessages]
+  [RetryPolicy]
+  [SettingsStore]
+  [JsonSettingsStore]
+  [AppSettings]
+}
+
+[Launcher] --> [MainApp]
+[MainApp] --> [MainController]
+[MainController] --> [BatchRunner]
+[MainController] --> [SettingsStore]
+[MainController] --> [BatchItemFx]
+[MainController] --> [ConversionProfileFx]
+
+[BatchRunner] --> [PipelineWorker]
+[BatchRunner] --> [CloudConvertFacade]
+[BatchRunner] --> [Validation]
+
+[Validation] --> [Profiles]
+
+[PipelineWorker] --> [CloudConvertFacade]
+[PipelineWorker] --> [BatchItem]
+[PipelineWorker] --> [Validation]
+[PipelineWorker] --> [OutputNaming]
+[PipelineWorker] --> [ErrorMessages]
+
+[BatchItemFx] --> [BatchItem]
+[ConversionProfileFx] --> [ConversionProfile]
+
+[CloudConvertFacadeImpl] ..> [CloudConvertFacade]
+[JsonSettingsStore] ..> [SettingsStore]
+
+@enduml
+
+@startuml deployment
+!theme plain
+title Converto - Deployment & Dependencies
+
+node "Converto App (JVM 21)" {
+  component "JavaFX Runtime" as javafx
+  component "MainApp" as app
+  component "CloudConvert SDK" as sdk
+  component "Jackson" as jackson
+  component "SLF4J/Logback" as log
+  
+  app --> javafx
+  app --> sdk
+  app --> jackson
+  app --> log
+}
+
+cloud "CloudConvert API" as api {
+}
+
+sdk --> api : HTTPS
+
+database "File System" as fs {
+  folder "settings.json"
+  folder "Output directory"
+  folder ".tmp (staging)"
+}
+
+app --> fs : read/write
+
+@enduml

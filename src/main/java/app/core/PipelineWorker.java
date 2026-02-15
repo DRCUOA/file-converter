@@ -1,9 +1,11 @@
 package app.core;
 
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -12,17 +14,20 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Runs the conversion pipeline for a single file. Never runs on FX thread.
+ * Output directory is resolved at conversion time, not from BatchItem.
  */
 public class PipelineWorker implements Runnable {
 
     private static final Logger LOG = LoggerFactory.getLogger(PipelineWorker.class);
 
     private final BatchItem item;
+    private final Path outputDir;
     private final CloudConvertFacade facade;
     private final AtomicBoolean cancelRequested;
 
-    public PipelineWorker(BatchItem item, CloudConvertFacade facade, AtomicBoolean cancelRequested) {
+    public PipelineWorker(BatchItem item, Path outputDir, CloudConvertFacade facade, AtomicBoolean cancelRequested) {
         this.item = item;
+        this.outputDir = outputDir;
         this.facade = facade;
         this.cancelRequested = cancelRequested;
     }
@@ -47,8 +52,8 @@ public class PipelineWorker implements Runnable {
             executeConversion();
         } catch (Exception e) {
             item.status = BatchItemStatus.Failed.name();
-            item.message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            LOG.error("Worker failed for {}", item.input, e);
+            item.message = ErrorMessages.fromException(e);
+            LOG.error("Worker failed for {}: {}", item.input, item.message, e);
         }
     }
 
@@ -76,8 +81,8 @@ public class PipelineWorker implements Runnable {
         }
         item.status = BatchItemStatus.Downloading.name();
         String url = getExportUrl(exportTaskId);
-        Path outputPath = OutputNaming.resolveInDir(item.input, item.outputDir, item.profile);
-        Path tmpDir = item.outputDir.resolve(".tmp");
+        Path outputPath = OutputNaming.resolveInDir(item.input, outputDir, item.profile);
+        Path tmpDir = outputDir.resolve(".tmp");
         Files.createDirectories(tmpDir);
         String baseName = item.input.getFileName().toString();
         int dot = baseName.lastIndexOf('.');
@@ -102,31 +107,79 @@ public class PipelineWorker implements Runnable {
                 LOG.debug("Polling job {} status={} (poll {}/{})",
                         jobId, job.status(), i + 1, maxPolls);
             }
-            if ("finished".equals(job.status())) {
+            if (isStatus(job.status(), "finished")) {
                 LOG.debug("Job {} finished", jobId);
-                return findExportTaskId(job, exportTaskName);
+                String exportTaskId = findExportTaskId(job, exportTaskName);
+                if (exportTaskId == null || exportTaskId.isBlank()) {
+                    throw new RuntimeException("Export task not found in finished job");
+                }
+                return exportTaskId;
             }
-            if ("error".equals(job.status())) {
+            if (isStatus(job.status(), "error")) {
                 LOG.warn("Job {} failed", jobId);
                 throw new RuntimeException("Job failed");
             }
             Thread.sleep(3000);
         }
+        if (cancelRequested.get()) {
+            LOG.info("Polling canceled for job {}", jobId);
+            return null;
+        }
         LOG.warn("Job {} timed out after {} polls", jobId, maxPolls);
         throw new RuntimeException("Job timed out");
     }
 
-    @SuppressWarnings("unchecked")
+    private boolean isStatus(String actualStatus, String expectedStatus) {
+        if (actualStatus == null) {
+            return false;
+        }
+        return expectedStatus.equals(actualStatus.toLowerCase(Locale.ROOT));
+    }
+
     private String findExportTaskId(CloudConvertFacade.JobResult job, String exportTaskName) {
         Object tasks = job.tasks();
         if (tasks instanceof List) {
+            String exportByOperation = null;
             for (Object t : (List<?>) tasks) {
-                if (t instanceof Map) {
-                    Map<String, Object> m = (Map<String, Object>) t;
-                    if (exportTaskName.equals(m.get("name"))) {
-                        Object id = m.get("id");
-                        return id != null ? id.toString() : null;
-                    }
+                String id = readTaskField(t, "id");
+                String name = readTaskField(t, "name");
+                if (id == null || id.isBlank()) {
+                    continue;
+                }
+                if (exportTaskName.equals(name)) {
+                    return id;
+                }
+                String operation = readTaskField(t, "operation");
+                if (isStatus(operation, "export/url")) {
+                    exportByOperation = id;
+                }
+            }
+            return exportByOperation;
+        }
+        return null;
+    }
+
+    private String readTaskField(Object task, String key) {
+        return readStringField(task, key);
+    }
+
+    private String getExportUrl(String exportTaskId) throws Exception {
+        CloudConvertFacade.TaskResult task = facade.getTask(item.jobId, exportTaskId);
+        String url = extractFirstExportUrl(task.output());
+        if (url != null && !url.isBlank()) {
+            LOG.debug("Resolved export URL for job {}", item.jobId);
+            return url;
+        }
+        throw new RuntimeException("No export URL in task result");
+    }
+
+    private String extractFirstExportUrl(Object taskOutput) {
+        Object files = readField(taskOutput, "files");
+        if (files instanceof List) {
+            for (Object file : (List<?>) files) {
+                String url = readStringField(file, "url");
+                if (url != null && !url.isBlank()) {
+                    return url;
                 }
             }
         }
@@ -134,20 +187,27 @@ public class PipelineWorker implements Runnable {
     }
 
     @SuppressWarnings("unchecked")
-    private String getExportUrl(String exportTaskId) throws Exception {
-        CloudConvertFacade.TaskResult task = facade.getTask(item.jobId, exportTaskId);
-        Object result = task.output();
-        if (result instanceof Map) {
-            Object files = ((Map<String, Object>) result).get("files");
-            if (files instanceof List && !((List<?>) files).isEmpty()) {
-                Object first = ((List<?>) files).get(0);
-                if (first instanceof Map) {
-                    Object url = ((Map<String, Object>) first).get("url");
-                    LOG.debug("Resolved export URL for job {}", item.jobId);
-                    return url != null ? url.toString() : null;
-                }
-            }
+    private Object readField(Object source, String key) {
+        if (source == null || key == null || key.isBlank()) {
+            return null;
         }
-        throw new RuntimeException("No export URL in task result");
+        if (source instanceof Map) {
+            return ((Map<String, Object>) source).get(key);
+        }
+        try {
+            String methodName = "get" + Character.toUpperCase(key.charAt(0)) + key.substring(1);
+            Method method = source.getClass().getDeclaredMethod(methodName);
+            method.setAccessible(true);
+            return method.invoke(source);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String readStringField(Object source, String key) {
+        Object value = readField(source, key);
+        return value != null ? value.toString() : null;
     }
 }

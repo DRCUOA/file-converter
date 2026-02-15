@@ -1,5 +1,6 @@
 package app.core;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -24,7 +25,7 @@ public class BatchRunner {
         this.concurrency = Math.max(1, concurrency);
     }
 
-    public void run(List<BatchItem> items) {
+    public void run(List<BatchItem> items, Path outputDir) {
         cancelRequested.set(false);
         LOG.debug("Batch run started: items={}, concurrency={}", items.size(), concurrency);
         ExecutorService pool = Executors.newFixedThreadPool(concurrency);
@@ -42,7 +43,7 @@ public class BatchRunner {
                             item.input != null ? item.input.getFileName() : "<null>", result.message());
                     continue;
                 }
-                pool.submit(new PipelineWorker(item, facade, cancelRequested));
+                pool.submit(new PipelineWorker(item, outputDir, facade, cancelRequested));
                 LOG.debug("Submitted item {}", item.input != null ? item.input.getFileName() : "<null>");
             }
         } finally {
