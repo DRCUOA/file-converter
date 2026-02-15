@@ -31,6 +31,8 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.net.URL;
@@ -44,6 +46,8 @@ import java.util.concurrent.Executors;
  * Main controller for the File Converter UI.
  */
 public class MainController implements Initializable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MainController.class);
 
     @FXML
     private ComboBox<ConversionProfileFx> profileCombo;
@@ -132,10 +136,12 @@ public class MainController implements Initializable {
         startButton.setOnAction(e -> startBatch());
         cancelButton.setOnAction(e -> cancelBatch());
         saveLogButton.setOnAction(e -> saveLog());
+        LOG.debug("UI initialized");
     }
 
     private void loadSettings() {
         AppSettings s = settingsStore.load();
+        LOG.debug("Loaded settings from {}", settingsStore.getSettingsPath());
         if (s.lastOutputDir() != null) {
             outputDir = s.lastOutputDir();
             outputDirField.setText(outputDir.toString());
@@ -156,6 +162,7 @@ public class MainController implements Initializable {
                 settingsStore.load().apiKey(),
                 outputDir,
                 selected != null ? selected.getProfile().id() : "mod-mov"));
+        LOG.debug("Saved settings to {}", settingsStore.getSettingsPath());
     }
 
     private void chooseOutputDir() {
@@ -168,6 +175,7 @@ public class MainController implements Initializable {
             outputDir = dir.toPath();
             outputDirField.setText(outputDir.toString());
             saveSettings();
+            LOG.debug("Output directory set to {}", outputDir);
         }
     }
 
@@ -181,6 +189,7 @@ public class MainController implements Initializable {
         List<File> files = chooser.showOpenMultipleDialog(addFilesButton.getScene().getWindow());
         if (files != null) {
             ConversionProfile profile = getSelectedProfile();
+            LOG.debug("Adding {} file(s) with profile {}", files.size(), profile.id());
             for (File f : files) {
                 BatchItem item = new BatchItem(f.toPath(), outputDir, profile);
                 Validation.ValidationResult vr = Validation.validate(item);
@@ -207,6 +216,7 @@ public class MainController implements Initializable {
     private void startBatch() {
         if (outputDir == null) {
             showAlert("Select output directory first");
+            LOG.warn("Batch start blocked: output directory not selected");
             return;
         }
         String apiKey = settingsStore.load().apiKey();
@@ -214,7 +224,8 @@ public class MainController implements Initializable {
             apiKey = System.getenv("CLOUDCONVERT_API_KEY");
         }
         if (apiKey == null || apiKey.isBlank()) {
-            showAlert("Set CLOUDCONVERT_API_KEY or configure API key in ~/.file-converter/settings.json");
+            showAlert("Set CLOUDCONVERT_API_KEY or configure API key in " + settingsStore.getSettingsPath());
+            LOG.warn("Batch start blocked: API key missing");
             return;
         }
         try {
@@ -224,22 +235,27 @@ public class MainController implements Initializable {
                     .map(BatchItemFx::getItem)
                     .filter(i -> !"Skipped".equals(i.status) && !"Failed".equals(i.status))
                     .toList();
+            LOG.debug("Starting batch with {} item(s), concurrency={}",
+                    items.size(), concurrencySpinner.getValue());
             saveSettings();
             uiExecutor.submit(() -> {
                 batchRunner.run(items);
                 Platform.runLater(() -> {
                     batchItems.forEach(BatchItemFx::syncFromItem);
                     log("Batch completed");
+                    LOG.debug("Batch UI sync completed");
                 });
             });
         } catch (Exception e) {
             showAlert("Failed to start: " + e.getMessage());
+            LOG.error("Failed to start batch", e);
         }
     }
 
     private void cancelBatch() {
         if (batchRunner != null) {
             batchRunner.cancel();
+            LOG.info("Batch cancel requested");
         }
     }
 
@@ -251,8 +267,10 @@ public class MainController implements Initializable {
         if (f != null) {
             try {
                 java.nio.file.Files.writeString(f.toPath(), logArea.getText());
+                LOG.debug("Saved UI log to {}", f.toPath());
             } catch (Exception e) {
                 showAlert("Failed to save: " + e.getMessage());
+                LOG.error("Failed to save UI log to {}", f.toPath(), e);
             }
         }
     }
@@ -264,9 +282,11 @@ public class MainController implements Initializable {
 
     private void log(String msg) {
         Platform.runLater(() -> logArea.appendText(msg + "\n"));
+        LOG.debug("UI log: {}", msg);
     }
 
     private void showAlert(String msg) {
+        LOG.warn("Alert shown: {}", msg);
         Platform.runLater(() -> {
             Alert a = new Alert(Alert.AlertType.WARNING);
             a.setContentText(msg);

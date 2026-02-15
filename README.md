@@ -11,7 +11,7 @@ Native desktop batch file converter using CloudConvert API. Converts MOD→MOV, 
 
 1. Set your CloudConvert API key:
    - Environment: `export CLOUDCONVERT_API_KEY=your-key`
-   - Or add to `~/.file-converter/settings.json`: `{"apiKey": "your-key", ...}`
+   - Or add to `./settings.json`: `{"apiKey": "your-key", ...}`
 
 2. Build: `./gradlew installDist`
 
@@ -27,3 +27,11 @@ Native desktop batch file converter using CloudConvert API. Converts MOD→MOV, 
 2. Add files (MOD, JPEG, DOCX)
 3. Choose profile (MOD→MOV, JPEG→WEBP, DOCX→PDF)
 4. Click Start
+
+## Logging
+
+- Logs are written to `~/.file-converter.log`
+- Application package logs (`app.*`) default to `DEBUG`
+- Override levels with env vars:
+  - `APP_LOG_LEVEL` (default: `DEBUG`)
+  - `ROOT_LOG_LEVEL` (default: `INFO`)

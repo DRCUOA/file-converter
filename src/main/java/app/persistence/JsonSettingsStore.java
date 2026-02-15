@@ -15,15 +15,39 @@ public class JsonSettingsStore implements SettingsStore {
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .enable(SerializationFeature.INDENT_OUTPUT);
+    private static final String SETTINGS_FILE_NAME = "settings.json";
+    private static final Path LEGACY_HOME_SETTINGS_PATH =
+            Paths.get(System.getProperty("user.home"), ".file-converter", SETTINGS_FILE_NAME);
 
     private final Path settingsPath;
 
     public JsonSettingsStore() {
-        this(Paths.get(System.getProperty("user.home"), ".file-converter", "settings.json"));
+        this(resolveDefaultSettingsPath());
     }
 
     public JsonSettingsStore(Path settingsPath) {
         this.settingsPath = settingsPath;
+    }
+
+    private static Path resolveDefaultSettingsPath() {
+        Path projectRoot = findProjectRoot(Paths.get(System.getProperty("user.dir")));
+        if (projectRoot != null) {
+            return projectRoot.resolve(SETTINGS_FILE_NAME);
+        }
+        return LEGACY_HOME_SETTINGS_PATH;
+    }
+
+    private static Path findProjectRoot(Path startPath) {
+        Path current = startPath.toAbsolutePath();
+        while (current != null) {
+            if (Files.exists(current.resolve(".git"))
+                    || Files.exists(current.resolve("settings.gradle"))
+                    || Files.exists(current.resolve("build.gradle"))) {
+                return current;
+            }
+            current = current.getParent();
+        }
+        return null;
     }
 
     @Override

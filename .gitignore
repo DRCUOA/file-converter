@@ -9,6 +9,7 @@ build/
 *.ear
 *.log
 hs_err_pid*
+settings.json
 
 # IDE
 .idea/

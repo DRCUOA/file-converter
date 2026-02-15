@@ -38,7 +38,36 @@ javafx {
 }
 
 application {
-    mainClass = 'app.ui.MainApp'
+    // Use a plain Java entry point for packaged/classpath launches.
+    // Launching an Application subclass directly can fail with:
+    // "JavaFX runtime components are missing..."
+    mainClass = 'app.ui.Launcher'
+}
+
+tasks.named('startScripts') {
+    doLast {
+        def javafxJars = classpath.files
+                .findAll { it.name.startsWith('javafx-') }
+                .collect { it.name }
+                .sort()
+
+        if (!javafxJars.isEmpty()) {
+            def unixModulePath = javafxJars.collect { "\$APP_HOME/lib/${it}" }.join(':')
+            def windowsModulePath = javafxJars.collect { "%APP_HOME%\\lib\\${it}" }.join(';')
+
+            unixScript.text = unixScript.text.replace(
+                    'set -- \\',
+                    "set -- \\\n        --module-path \"${unixModulePath}\" \\\n        --add-modules javafx.controls,javafx.fxml \\"
+            )
+
+            windowsScript.text = windowsScript.text.replace(
+                    '"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %FILE_CONVERTER_OPTS%  -classpath "%CLASSPATH%" app.ui.Launcher %*',
+                    '"%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %FILE_CONVERTER_OPTS%  --module-path "' +
+                            windowsModulePath +
+                            '" --add-modules javafx.controls,javafx.fxml -classpath "%CLASSPATH%" app.ui.Launcher %*'
+            )
+        }
+    }
 }
 
 tasks.register('jpackageApp', Exec) {
@@ -52,7 +81,7 @@ tasks.register('jpackageApp', Exec) {
             '--app-version', version,
             '--input', libDir,
             '--main-jar', "file-converter-${version}.jar",
-            '--main-class', 'app.ui.MainApp',
+            '--main-class', 'app.ui.Launcher',
             '--dest', destDir
     doFirst {
         destDir.mkdirs()
